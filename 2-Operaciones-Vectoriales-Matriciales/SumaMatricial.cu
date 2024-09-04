@@ -6,6 +6,9 @@
 #define Nx 1000
 #define Ny 1000
 
+/**
+ * Función que inicializa un arreglo con números aleatorios entre 1 y 100.
+ */
 void initialize(float **A, int x, int y){
     srand(0);
     for (int i = 0; i < x; i++){
@@ -15,7 +18,7 @@ void initialize(float **A, int x, int y){
     }
 }
 
-/* 
+/** 
  * Función que realiza la suma de dos matrices de números aleatorios, de manera
  * tradicional (Row-Major-Order), utilizando la CPU.
  *
@@ -38,7 +41,7 @@ void rowSumOnCPU(float **A, float **B, float **C, int x, int y){
 }
 
 
-/* 
+/** 
  * Función que realiza la suma de dos matrices de números aleatorios, por
  * columnas (Row-Major-Order), utilizando la CPU.
  *
@@ -61,7 +64,7 @@ void columnSumOnCPU(float **A, float **B, float **C, int x, int y){
 }
 
 
-/*
+/**
  * Función que realiza la conversión de una matriz a un arreglo, es decir,
  * de un arreglo de 2 dimensiones a un arreglo de 1 dimensión.
  * 
@@ -78,7 +81,7 @@ void matrixToVector(float **A, float *V, int x, int y){
     }
 }
 
-/* 
+/**
  * 4. Kernel en CUDA que realiza la suma de dos arreglos de números aleatorios utilizando la GPU.
  *
  * @param A: Primer arreglo a sumar.
@@ -94,7 +97,7 @@ __global__ void sumOnGPU(float *A, float *B, float *C, int size){
     
 }
 
-/*
+/**
  * Función que obtiene la hora en segundos.
  *
  * @returns El tiempo actual del cpu en segundos.
@@ -106,7 +109,7 @@ double cpuTime()
     return ((double)tp.tv_sec + (double)tp.tv_usec * 1.e-06);
 }
 
-/*
+/**
  * Función que valida los resultados de la suma, obtenidos en la GPU y CPU.
  *
  * @param res_GPU: Resultado de la suma obtenida por la GPU, en forma de vector.
@@ -129,7 +132,7 @@ void validate(float *res_GPU, float **res_CPU, int x, int y){
     printf("SUMA CORRECTA\n");
 }
 
-/*
+/**
  * Función que calcula el SpeedUp.
  *
  * @param h_time: Tiempo utilizado por el Host (CPU) para realizar la operación.

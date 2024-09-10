@@ -62,12 +62,12 @@ void validate(float *res_GPU, float *res_CPU, int size){
     double epsilon = 1.0E-8;
     for (int i = 0; i < size; i++){
         if (abs(res_GPU[i] - res_CPU[i]) > epsilon){
-            printf("ERROR: suma distinta\n");
+            printf("ERROR: resta distinta\n");
             return;
         }
     }
     
-    printf("SUMA CORRECTA\n");
+    printf("RESTA CORRECTA\n");
 }
 
 /*

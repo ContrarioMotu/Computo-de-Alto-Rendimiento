@@ -3,13 +3,13 @@
 #include <sys/time.h>
 #include <cuda_runtime.h>
 
-#define Nrows 5
-#define Ncols 3
-#define Mrows 3
-#define Mcols 7
+#define Nrows 1000
+#define Ncols 2000
+#define Mrows 2000
+#define Mcols 3000
 
 /**
- * Función que inicializa una matriz con números aleatorios entre 1 y 100.
+ * Inicializa una matriz con números aleatorios entre 1 y 100.
  *
  * @param x: Cantidad de filas de la matriz.
  * @param y: Cantidad de columnas de la matriz.
@@ -38,8 +38,8 @@ float **initialize(int x, int y, short c)
 }
 
 /**
- * Función que realiza la conversión de una matriz a un arreglo, es decir, de un arreglo de 2
- * dimensiones a un arreglo de 1 dimensión.
+ * Realiza la conversión de una matriz a un arreglo, es decir, de un arreglo de 2 dimensiones a un
+ * arreglo de 1 dimensión.
  *
  * @param A: Matriz a convertir.
  * @param V: Vector donde se almacenará la matriz.
@@ -58,34 +58,32 @@ void matrixToVector(float **A, float *V, int x, int y)
 }
 
 /**
- * 4. Kernel en CUDA que realiza el producto de dos matrices en su representación vectorial, de
- * números aleatorios utilizando la GPU.
+ * (Kernel) Realiza el producto de dos matrices en su representación vectorial, de números
+ * aleatorios utilizando la GPU.
  *
  * @param A: Primer matriz a multiplicar, en forma de arreglo.
  * @param B: Segunda matriz a multiplicar, en forma de arreglo.
  * @param C: Arreglo donde se almacenará el resultado del pructo.
  * @param Acols: Cantidad de filas de la matriz A.
- * @param k: Cantidad de filas de la matriz A y columnas de la matriz B.
+ * @param k: Cantidad de columnas de la matriz A y filas de la matriz B.
  * @param Brows: Cantidad de columnas de la matriz B.
  */
-__global__ void prodOnGPU(float *A, float *B, float *C, int Acols, int k, int Brows)
+__global__ void prodOnGPU(float *A, float *B, float *C, int Arows, int k, int Bcols)
 {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (col < Brows && row < Acols)
+    if (col < Bcols && row < Arows)
     {
-        int sum = 0;
         for (int i = 0; i < k; i++)
         {
-            sum += A[row * k + i] * B[i * k + col];
+            C[(row * Bcols) + col] += A[(row * k) + i] * B[(i * Bcols) + col];
         }
-        C[row * k + col] = sum;
     }
 }
 
 /**
- * Función que calcula el producto de dos matrices, en CPU.
+ * Calcula el producto de dos matrices, en CPU.
  *
  * @param A: Matriz A.
  * @param B: Matriz B.
@@ -111,7 +109,7 @@ void prodOnCPU(float **A, float **B, float **C, int ax, int ay, int bx, int by)
 }
 
 /**
- * Función que obtiene la hora en segundos.
+ * Utilidad para obtener la hora en segundos.
  *
  * @returns El tiempo actual del cpu en segundos.
  */
@@ -123,7 +121,7 @@ double cpuTime()
 }
 
 /**
- * Función que valida los resultados del producto, obtenidos en la GPU y CPU.
+ * Valida los resultados del producto, obtenidos en la GPU y CPU.
  *
  * @param res_GPU: Resultado del producto obtenido por la GPU, en forma de vector.
  * @param res_CPU: Resultado del producto obtenido por la CPU, en forma matricial.
@@ -137,8 +135,9 @@ void validate(float *res_GPU, float **res_CPU, int x, int y)
     {
         for (int j = 0; j < y; j++)
         {
-            if (abs(res_GPU[(x * i) + j] - res_CPU[i][j]) > epsilon)
+            if (abs(res_GPU[(y * i) + j] - res_CPU[i][j]) > epsilon)
             {
+                printf("%2.f != %2.f\n", res_GPU[(y * i) + j], res_CPU[i][j]);
                 printf("ERROR: producto distinto\n");
                 return;
             }
@@ -156,7 +155,7 @@ void validateMatrices(int ax, int ay, int bx, int by){
 }
 
 /**
- * Función que calcula el SpeedUp.
+ * Calcula el SpeedUp.
  *
  * @param h_time: Tiempo utilizado por el Host (CPU) para realizar la operación.
  * @param d_time: Tiempo utilizado por el Host (GPU) para realizar la operación.
@@ -201,27 +200,27 @@ int main()
 
     /// 2. Asignación de memoria dinámica
     // ----------------------------------
-    h_A = initialize(Ncols, Nrows, 1);
-    h_B = initialize(Mcols, Mrows, 1);
-    h_C = initialize(Ncols, Mrows, 0);
-    h_VA = new float[Ncols * Nrows];
-    h_VB = new float[Mcols * Mrows];
-    h_res = new float[Ncols, Mrows];
+    h_A = initialize(Nrows, Ncols, 1);
+    h_B = initialize(Mrows, Mcols, 1);
+    h_C = initialize(Nrows, Mcols, 0);
+    h_VA = new float[Nrows * Ncols];
+    h_VB = new float[Mrows * Mcols];
+    h_res = new float[Nrows * Mcols];
 
-    matrixToVector(h_A, h_VA, Ncols, Nrows);
-    matrixToVector(h_B, h_VB, Mcols, Mrows);
-    //matrixToVector(h_C, h_res, Ncols, Mrows);
+    matrixToVector(h_A, h_VA, Nrows, Ncols);
+    matrixToVector(h_B, h_VB, Mrows, Mcols);
+    matrixToVector(h_C, h_res, Nrows, Mcols);
     
     //--------------- GPU ---------------
-    cudaMalloc((float **)&d_A, Ncols * Nrows * sizeof(float));
-    cudaMalloc((float **)&d_B, Mcols * Mrows * sizeof(float));
-    cudaMalloc((float **)&d_C, Ncols * Mrows * sizeof(float));
+    cudaMalloc((float **)&d_A, Nrows * Ncols * sizeof(float));
+    cudaMalloc((float **)&d_B, Mrows * Mcols * sizeof(float));
+    cudaMalloc((float **)&d_C, Nrows * Mcols * sizeof(float));
     // ----------------------------------
 
     // 3. Transferencia de datos, del Host al Device (CPU a GPU)
-    cudaMemcpy(d_A, h_VA, Ncols * Nrows * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_B, h_VB, Mcols * Mrows * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_C, h_res, Ncols * Mrows * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_A, h_VA, Nrows * Ncols * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, h_VB, Mrows * Mcols * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_C, h_res, Nrows * Mcols * sizeof(float), cudaMemcpyHostToDevice);
     //----------------------------------------------------------
 
     double tic, toc, timeCPU, timeGPU;
@@ -229,18 +228,18 @@ int main()
     // 5. Configuración de la ejecución en la GPU.
     // -------------------------------------------
 
-    int brows = (int)(Nrows / 32) + 1;
-    int bcols = (int)(Mcols / 32) + 1;
+    int brows = (int)((Nrows + 31 )/ 32);
+    int bcols = (int)((Mcols + 31 )/ 32);
     dim3 grid(bcols, brows);
 
     int trows = (Nrows <= 32)?  Nrows : 32;
     int tcols = (Mcols <= 32)? Mcols : 32;
+    dim3 block(tcols, trows);
     printf("Block: %d x %d\n", bcols, brows);
     printf("Thread: %d x %d\n", tcols, trows);
-    dim3 block(tcols, trows);
 
     tic = cpuTime();
-    prodOnGPU<<<grid, block>>>(d_A, d_B, d_C, Ncols, Nrows, Mrows);
+    prodOnGPU<<<grid, block>>>(d_A, d_B, d_C, Nrows, Ncols, Mcols);
     cudaDeviceSynchronize();
     toc = cpuTime();
     timeGPU = toc - tic;
@@ -248,7 +247,8 @@ int main()
     // -------------------------------------------
 
     // 6. Transferencia de datos, del Device al Host (GPU a CPU)
-    cudaMemcpy(h_res, d_C, Ncols * Mrows * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_res, d_C, Nrows * Mcols * sizeof(float), cudaMemcpyDeviceToHost);
+    printf("cuda Memcpy ready.\n");
     //----------------------------------------------------------
 
     // Producto de matrices en CPU.
@@ -260,26 +260,16 @@ int main()
     printf("CPU time: %lf segs.\n", timeCPU);
     // -------------------------------
 
-    printVector(h_res, Nrows * Mcols);
-    printMatrix(h_C, Nrows, Mcols);
-
     // 7. Validación de resultados.
     // ------------------------------
-    validate(h_res, h_C, Nrows, Ncols);
+    validate(h_res, h_C, Nrows, Mcols);
     // ------------------------------
 
     // 8. Liberación de memoria.
     // ----------------------
-    free(h_A);
-    free(h_B);
-    free(h_C);
-    free(h_VA);
-    free(h_VB);
-    free(h_res);
+    free(h_A); free(h_B); free(h_C); free(h_VA); free(h_VB); free(h_res);
 
-    cudaFree(d_A);
-    cudaFree(d_B);
-    cudaFree(d_C);
+    cudaFree(d_A); cudaFree(d_B); cudaFree(d_C);
     // ----------------------
 
     // 9. SpeedUp.

@@ -248,7 +248,6 @@ int main()
 
     // 6. Transferencia de datos, del Device al Host (GPU a CPU)
     cudaMemcpy(h_res, d_C, Nrows * Mcols * sizeof(float), cudaMemcpyDeviceToHost);
-    printf("cuda Memcpy ready.\n");
     //----------------------------------------------------------
 
     // Producto de matrices en CPU.

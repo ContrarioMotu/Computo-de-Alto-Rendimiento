@@ -29,7 +29,7 @@ void initialize(long *A, int size){
 }
 
 /* 
- * Función que realiza el producto punto de dos arreglos de números aleatorios utilizando la CPU.
+ * Realiza el producto punto de dos arreglos de números aleatorios utilizando la CPU.
  *
  * @param A: Primer arreglo.
  * @param B: Segundo arreglo.
@@ -45,7 +45,7 @@ long dotPointOnCPU(long *A, long *B, int size){
 }
 
 /* 
- * 4. Kernel en CUDA que realiza le producto punto de dos arreglos de números aleatorios
+ * 4. (Kernel) Realiza le producto punto de dos arreglos de números aleatorios
  * utilizando la GPU.
  *
  * @param A: Primer arreglo.
@@ -62,7 +62,7 @@ __global__ void dotPointOnGPU(long *A, long *B, long *C, int size){
     }
     int index;
     int stride = blockDim.x / 2;
-    while(stride > 0 && size > 1){
+    while(stride > 0){
         index = idx + stride;
         if (index < size){
             A[idx] += A[index];
@@ -97,7 +97,7 @@ double cpuTime()
  * @param size: Tamaño de los arreglos con los resultados.
  */
 void validate(long res_GPU, long res_CPU, int size){
-    double epsilon = 1.0E-8;
+    double epsilon = 1.0E-6;
     if (abs(res_GPU - res_CPU) > epsilon){
         std::cout << "ERROR: producto distinto\n";
         std::cout << res_GPU << " != " << res_CPU << "\n";

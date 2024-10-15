@@ -11,7 +11,7 @@
  * @returns La imagen cargada.
  */
 cv::Mat loadImage(){
-    cv::Mat image = cv::imread("Imagen/BananaCat.jpg", cv::IMREAD_COLOR);
+    cv::Mat image = cv::imread("Images/BananaCat.jpg", cv::IMREAD_COLOR);
 
     if (image.empty())
     {
@@ -176,8 +176,8 @@ int main()
     validate(h_greyImgGPU.ptr<uchar>(), h_greyImg.ptr<uchar>(), rows, cols);
     // ------------------------------
 
-    cv::imwrite("Imagen/BananaCatGreyGPU.jpg", h_greyImgGPU);
-    cv::imwrite("Imagen/BananaCatGreyCPU.jpg", h_greyImg);
+    cv::imwrite("Images/BananaCatGreyGPU.jpg", h_greyImgGPU);
+    cv::imwrite("Images/BananaCatGreyCPU.jpg", h_greyImg);
 
     // 8. Liberación de memoria.
     // ---------------------------

@@ -13,7 +13,7 @@ using namespace cv;
  * @returns La imagen cargada.
  */
 Mat loadImage(){
-    Mat image = imread("Imagenes/imgPrueba.jpg", IMREAD_COLOR);
+    Mat image = imread("Images/imgPrueba.jpg", IMREAD_COLOR);
 
     if (image.empty())
     {
@@ -222,7 +222,7 @@ int main()
     Mat bluredImage;
     merge(channelsGPU, bluredImage);
 
-    imwrite("Imagenes/imgBlured.jpg", bluredImage);
+    imwrite("Images/imgBlured.jpg", bluredImage);
 
     // 8. Liberación de memoria.
     // ---------------------------

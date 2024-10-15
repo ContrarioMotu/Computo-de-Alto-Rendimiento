@@ -191,10 +191,10 @@ int main(){
     // ------------------------------
 
     memcpy(img.ptr(), h_imgGPU, imgBytes);
-    imwrite("Imagenes/imgJuliaGPU.png", img);
+    imwrite("Images/imgJuliaGPU.png", img);
 
     memcpy(img.ptr(), h_imgCPU, imgBytes);
-    imwrite("Imagenes/imgJuliaCPU.png", img);
+    imwrite("Images/imgJuliaCPU.png", img);
 
     // 8. Liberación de memoria.
     // -------------------------

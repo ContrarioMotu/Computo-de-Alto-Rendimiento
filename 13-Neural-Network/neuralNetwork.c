@@ -2,46 +2,16 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <math.h>
-#include <cuda_runtime.h>
 
 #define INPUT 784  // 28*28 pixels
-#define HIDDEN 256 // Number of hidden nodes
+#define HIDDEN 20 // Number of hidden nodes
 #define OUTPUT 10  // 10 digits (0-9)
 
 #define TRAINING_SET 60000
 #define TEST_SET 10000
 
-#define EPOCHS 2
+#define EPOCHS 20
 
-void initializeNetwork(double **X_train, double **Y_train, double **X_test, double **Y_test,
-                        double **W1, double **W2, double *b1, double *b2){
-    X_train = (double**)malloc(TRAINING_SET * sizeof(double*));
-    Y_train = (double**)malloc(TRAINING_SET * sizeof(double*));
-    for (int i = 0; i < TRAINING_SET; i++)
-    {
-        X_train[i] = (double*)malloc(INPUT * sizeof(double));
-        Y_train[i] = (double*)malloc(OUTPUT * sizeof(double));
-    }
-    X_test = (double**)malloc(TEST_SET * sizeof(double*));
-    Y_test = (double**)malloc(TEST_SET * sizeof(double*));
-    for (int i = 0; i < TEST_SET; i++)
-    {
-        X_test[i] = (double*)malloc(INPUT * sizeof(double));
-        Y_test[i] = (double*)malloc(OUTPUT * sizeof(double));
-    }
-    W1 = (double**)malloc(INPUT * sizeof(double*));
-    for (int i = 0; i < INPUT; i++)
-    {
-        W1[i] = (double*)malloc(HIDDEN * sizeof(double));
-    }
-    W2 = (double**)malloc(HIDDEN * sizeof(double*));
-    for (int i = 0; i < HIDDEN; i++)
-    {
-        W2[i] = (double*)malloc(OUTPUT * sizeof(double));
-    }
-    b1 = (double*)malloc(HIDDEN * sizeof(double));
-    b2 = (double*)malloc(OUTPUT * sizeof(double));
-}
 
 void loadDataset(double **trainingSet, double **trainingLabels, double **testSet, double **testLabels){
     FILE *trainingSetFile = fopen("mnist_train_images.bin", "rb");
@@ -121,9 +91,18 @@ double sigmoid(double x)
     return 1.0 / (1.0 + exp(-x));
 }
 
-// __device__ double sigmoid(double x){
-//     return 1.0 / (1.0 + exp(-x));
-// }
+void printMatrix(double **A, int ax, int ay){
+    for (int i = 0; i < ax; i++)
+    {
+        printf("[");
+        for (int j = 0; j < ay; j++)
+        {
+            printf("%f, ", A[i][j]);
+        }
+        printf("]\n");
+    }
+    printf("\n");
+}
 
 double crossEntropy(double **labels, double **predicts, int size, int clases) {
     double sum = 0.0;
@@ -137,7 +116,7 @@ double crossEntropy(double **labels, double **predicts, int size, int clases) {
 
 int max_index(double *out, int size) {
     int max_i = 0;
-    for (int i = 1; i < size; i++) {
+    for (int i = 0; i < size; i++) {
         if (out[i] > out[max_i]) {
             max_i = i;
         }
@@ -223,7 +202,7 @@ double *backPropagate(double *input, double *output, double **W1, double **W2, d
         }
     }
 
-    double learning_rate = 0.1;
+    double learning_rate = 0.01;
     for (int i = 0; i < INPUT; i++)
     {
         for (int j = 0; j < HIDDEN; j++)
@@ -347,7 +326,7 @@ void train(double **input, double **output, double **W1, double **W2, double *b1
 
 void printConfusionMatrix(int **matrix){
 
-    char *sep = (char*)mallor(sizeof(char) * 7 * OUTPUT);
+    char *sep = (char*)malloc(sizeof(char) * 7 * OUTPUT);
     for (int i = 0; i < 7*OUTPUT; i++)
     {
         sep[i] = '-';
@@ -396,31 +375,6 @@ void test(double **input, double **output, double **W1, double **W2, double *b1,
     free(predicts);
 }
 
-// void testOnGPU(double *input, double *output, double *W1, double *W2, double *b1, double *b2){
-//     double *predicts = new double[TEST_SET * OUTPUT];
-//     double tic, toc, time;
-
-
-//     tic = cpuTime();
-//     for (int i = 0; i < TEST_SET; i++)
-//     {
-//         feedForwardOnGPU(input + (i*TEST_SET), predicts + (i*TEST_SET), W1, W2, b1, b2);
-//     }
-
-//     toc = cpuTime();
-//     time = toc - tic;
-//     int **matrix = confusionMatrix(output, predicts, TEST_SET, OUTPUT);
-//     int correct_predictions = 0;
-//     for (int i = 0; i < OUTPUT; i++)
-//     {
-//         correct_predictions += matrix[i][i];
-//     }
-//     printConfusionMatrix(matrix);
-//     printf("Testing on GPU -> Accuracy: %.6f, Elapsed time: %.6f\n",
-//                         (double) correct_predictions / TEST_SET, time);
-//     free(predicts);
-// }
-
 void loadModel(char* file_name, double **W1, double *b1, double **W2, double *b2) {
     FILE* file = fopen(file_name, "rb");
     if (file == NULL) {
@@ -439,51 +393,81 @@ void genRandWeights(double **W1, double *b1, double **W2, double *b2) {
     {
         for (int j = 0; j < HIDDEN; j++)
         {
-            W1[i][j] = (double) ((rand() % 20001)*0.0001) - 1.0;
+            W1[i][j] = (double) ((rand() % 2000001)*0.000001) - 1.0;
         }
     }
 
     for (int i = 0; i < HIDDEN; i++)
     {
-        b1[i] = (double) ((rand() % 20001)*0.0001) - 1.0;
+        b1[i] = (double) ((rand() % 2000001)*0.000001) - 1.0;
         for (int j = 0; j < OUTPUT; j++)
         {
-            W2[i][j] = (double) ((rand() % 20001)*0.0001) - 1.0;
+            W2[i][j] = (double) ((rand() % 2000001)*0.000001) - 1.0;
         }
     }
 
     for (int i = 0; i < OUTPUT; i++)
     {
-        b2[i] = (double) ((rand() % 20001)*0.0001) - 1.0;
+        b2[i] = (double) ((rand() % 2000001)*0.000001) - 1.0;
     }
 }
 
 int main()
 {
-    double **h_X_train, **h_Y_train, **h_X_test, **h_Y_test, **h_W1, **h_W2, *h_b1, *h_b2;
-    //double *d_X_train, *d_Y_train, *d_X_test, *d_Y_test, *d_W1, *d_W2, *d_b1, *d_b2;
+    double **X_train, **Y_train, **X_test, **Y_test, **W1, **W2, *b1, *b2;
 
-    initializeNetwork(h_X_train, h_Y_train, h_X_test, h_Y_test, h_W1, h_W2, h_b1, h_b2);
+    X_train = (double**)malloc(TRAINING_SET * sizeof(double*));
+    Y_train = (double**)malloc(TRAINING_SET * sizeof(double*));
+    for (int i = 0; i < TRAINING_SET; i++)
+    {
+        X_train[i] = (double*)malloc(INPUT * sizeof(double));
+        Y_train[i] = (double*)malloc(OUTPUT * sizeof(double));
+    }
 
-    loadDataset(h_X_train, h_Y_train, h_X_test, h_Y_test);
+    
+    X_test = (double**)malloc(TEST_SET * sizeof(double*));
+    Y_test = (double**)malloc(TEST_SET * sizeof(double*));
+    for (int i = 0; i < TEST_SET; i++)
+    {
+        X_test[i] = (double*)malloc(INPUT * sizeof(double));
+        Y_test[i] = (double*)malloc(OUTPUT * sizeof(double));
+    }
+    W1 = (double**)malloc(INPUT * sizeof(double*));
+    for (int i = 0; i < INPUT; i++)
+    {
+        W1[i] = (double*)malloc(HIDDEN * sizeof(double));
+    }
+    W2 = (double**)malloc(HIDDEN * sizeof(double*));
+    for (int i = 0; i < HIDDEN; i++)
+    {
+        W2[i] = (double*)malloc(OUTPUT * sizeof(double));
+    }
+    b1 = (double*)malloc(HIDDEN * sizeof(double));
+    b2 = (double*)malloc(OUTPUT * sizeof(double));
+
+    printf("• Network initialized...\n");
+
+    loadDataset(X_train, Y_train, X_test, Y_test);
 
     printf("• Dataset loaded...\n");
 
-    genRandWeights(h_W1, h_b1, h_W2, h_b2);
+    genRandWeights(W1, b1, W2, b2);
 
     printf("• Weights initialized...\n");
 
-    train(h_X_train, h_Y_train, h_W1, h_W2, h_b1, h_b2);
-    test(h_X_test, h_Y_test, h_W1, h_W2, h_b1, h_b2);
+    printMatrix(Y_test, TEST_SET, OUTPUT);
 
-    free(h_X_train);
-    free(h_Y_train);
-    free(h_X_test);
-    free(h_Y_test);
-    free(h_W1);
-    free(h_W2);
-    free(h_b1);
-    free(h_b2);
+    //train(X_train, Y_train, W1, W2, b1, b2);
+    //test(X_test, Y_test, W1, W2, b1, b2);
+
+    free(X_train);
+    free(Y_train);
+    free(X_test);
+    free(Y_test);
+    free(W1);
+    free(W2);
+    free(b1);
+    free(b2);
 
     return 0;
 }

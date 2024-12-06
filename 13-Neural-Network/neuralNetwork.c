@@ -253,32 +253,6 @@ double *feedForward(double *input, double **W1, double **W2, double *b1, double 
     return prediction;
 }
 
-// __global__ void feedForwardOnGPU(double *input, double *pred, double *W1, double *W2, double *b1, double *b2){
-//     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-//     __shared__ double hidden[HIDDEN];
-//     if(idx < HIDDEN){
-//         double sum = 0.0;
-//         for (int i = 0; i < INPUT; i++)
-//         {
-//             sum += input[i] * W1[(i * HIDDEN) + idx];
-//         }
-//         sum += b1[idx];
-//         hidden[idx] = sigmoid(sum);
-//         __syncthreads();
-//     }
-
-//     if(idx < OUTPUT){
-//         double sum = 0.0;
-//         for (int i = 0; i < HIDDEN; i++)
-//         {
-//             sum += hidden[i] * W2[(i * OUTPUT) + idx];
-//         }
-//         sum += b2[idx];
-//         pred[idx] = sigmoid(sum);
-//         __syncthreads();
-//     }
-// }
-
 void saveModel(const char *file_name, double **W1, double *b1, double **W2, double *b2) {
     FILE* file = fopen(file_name, "wb");
     if (file == NULL) {

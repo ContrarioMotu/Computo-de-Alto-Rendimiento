@@ -4,13 +4,23 @@
 #include <math.h>
 
 #define INPUT 784  // 28*28 pixels
-#define HIDDEN 20 // Number of hidden nodes
+#define HIDDEN 256 // Number of hidden nodes
 #define OUTPUT 10  // 10 digits (0-9)
 
 #define TRAINING_SET 60000
 #define TEST_SET 10000
 
 #define EPOCHS 20
+
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
 
 
 void loadDataset(double **trainingSet, double **trainingLabels, double **testSet, double **testLabels){
@@ -103,10 +113,9 @@ double crossEntropy(double **labels, double **predicts, int size, int clases) {
     return -sum / size;
 }
 
-__device__ int max_index(double *out, int size) {
+int max_index(double *out, int size) {
     int max_i = 0;
     for (int i = 0; i < size; i++) {
-        printf("out[%d] = %f\n", i, out[i]);
         if (out[i] > out[max_i]) {
             max_i = i;
         }
@@ -126,26 +135,41 @@ double *vectorize(double **matrix, int rows, int columns) {
     return vector;
 }
 
+double **matrixize(double *vector, int rows, int columns) {
+    double **matrix = (double**)malloc(rows * sizeof(double*));
+    for (int i = 0; i < rows; i++)
+    {
+        matrix[i] = (double*)malloc(columns * sizeof(double));
+    }
+    for (int i = 0; i < rows; i++)
+    {
+        for (int j = 0; j < columns; j++)
+        {
+            matrix[i][j] = vector[(columns * i) + j];
+        }
+    }
+    return matrix;
+}
+
 void printVector(double *A, int size){
     printf("[");
     for(int i=0; i < size; i++){
-        printf("%.2f ", A[i]);
+        printf("%f ", A[i]);
     }
     printf("]\n");
 }
 
-__global__ void confusionMatrix(double *labels, double *predicts, int *matrix, int size) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int l, p;
-    printf("Conf matrix done...\n");
-    if (idx < size) {
-        l = max_index(labels + (idx * OUTPUT), OUTPUT);
-        printf("    • Label: %d\n", l);
-        p = max_index(predicts + (idx * OUTPUT), OUTPUT);
-        printf("    • Predicted: %d\n", p);
-        atomicAdd(&matrix[(p * OUTPUT) + l], 1);
+void printMatrix(double **A, int ax, int ay){
+    for (int i = 0; i < ax; i++)
+    {
+        printf("[");
+        for (int j = 0; j < ay; j++)
+        {
+            printf("%f, ", A[i][j]);
+        }
+        printf("]\n");
     }
-    __syncthreads();
+    printf("\n");
 }
 
 // double *backPropagate(double *input, double *output, double **W1, double **W2, double *b1, double *b2){
@@ -223,28 +247,31 @@ __global__ void confusionMatrix(double *labels, double *predicts, int *matrix, i
 
 __global__ void feedForwardOnGPU(double *in, double *pred, double *W1, double *W2, double *b1, double *b2){
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    __shared__ double hidden[HIDDEN];
-    if(idx < HIDDEN){
-        double sum = 0.0;
-        for (int i = 0; i < INPUT; i++)
-        {
-            sum += in[i] * W1[(i * HIDDEN) + idx];
-            
+    if (idx < TEST_SET) {
+    double hidden[HIDDEN];
+        for (int i = 0; i < HIDDEN; i++){
+            double sum = 0.0;
+            for (int j = 0; j < INPUT; j++)
+            {
+                sum += in[(idx * INPUT) + j] * W1[(j * HIDDEN) + i];
+                
+            }
+            sum += b1[i];
+            hidden[i] = sigmoid(sum);
         }
-        sum += b1[idx];
-        hidden[idx] = sigmoid(sum);
-        __syncthreads();
-    }
-    if(idx < OUTPUT){
-        double sum = 0.0;
-        for (int i = 0; i < HIDDEN; i++)
-        {
-            sum += hidden[i] * W2[(i * OUTPUT) + idx];
+        for (int i = 0; i < OUTPUT; i++){
+            double sum = 0.0;
+            for (int j = 0; j < HIDDEN; j++)
+            {
+                //printf("hidden[%d]", j); printf(" = %f\n", hidden[j]);
+                sum += hidden[j] * W2[(j * OUTPUT) + i];
+            }
+            sum += b2[i];
+            printf("Prediction[%d][%d]: %f\n", idx, (idx * TEST_SET) + i, pred[(idx * TEST_SET) + i]);
+            pred[(idx * TEST_SET) + i] = sigmoid(sum);
         }
-        sum += b2[idx];
-        pred[idx] = sigmoid(sum);
-        __syncthreads();
     }
+    __syncthreads();
 }
 
 void saveModel(const char *file_name, double **W1, double *b1, double **W2, double *b2) {
@@ -292,7 +319,7 @@ double cpuTime()
 //     free(predicts);
 // }
 
-void printConfusionMatrix(int *matrix){
+void printConfusionMatrix(int **matrix){
 
     char *sep = (char*)malloc(sizeof(char) * 7 * OUTPUT);
     for (int i = 0; i < 7*OUTPUT; i++)
@@ -308,9 +335,9 @@ void printConfusionMatrix(int *matrix){
     printf("\n      %s\n", sep);
 
     for (int i = 0; i < OUTPUT; i++){
-        printf("%-6d|", i * OUTPUT);
+        printf("%-6d|", i);
         for (int j = 0; j < OUTPUT; j++){
-            printf("%-6d|", matrix[(i * OUTPUT) + j]);
+            printf("%-6d|", matrix[i][j]);
         }
         printf("\n      %s\n", sep);
     }
@@ -343,36 +370,36 @@ void printConfusionMatrix(int *matrix){
 //     free(predicts);
 // }
 
-void test(double *input, double *output, double *W1, double *W2, double *b1, double *b2){
-    double *predicts; cudaMalloc((double **)&predicts, TEST_SET * OUTPUT * sizeof(double));
+void test(double *input, double *predicts, double *W1, double *W2, double *b1, double *b2){
     double tic, toc, time;
     dim3 threads(32);
     dim3 blocks((INPUT > OUTPUT)? (INPUT + threads.x - 1) / threads.x : (OUTPUT + threads.x - 1) / threads.x);
     printf("Threads: %d\n", threads.x);
     printf("Blocks: %d\n", blocks.x);
     tic = cpuTime();
-    for (int i = 0; i < TEST_SET; i++)
-    {
-        feedForwardOnGPU<<<blocks, threads>>>(input + (i*TEST_SET), predicts + (i*TEST_SET), W1, W2, b1, b2);
-    }
+    feedForwardOnGPU<<<blocks, threads>>>(input, predicts, W1, W2, b1, b2);
+    gpuErrchk( cudaPeekAtLastError() );
+    gpuErrchk( cudaDeviceSynchronize() );
     toc = cpuTime();
     time = toc - tic;
     printf("Testing on GPU -> Elapsed time: %.6f\n", time);
+}
 
-    int *matrix; cudaMalloc((void **)&matrix, OUTPUT * OUTPUT * sizeof(int));
-    blocks = dim3((TEST_SET + threads.x - 1) / threads.x);
-    printf("Threads: %d\n", threads.x);
-    printf("Blocks: %d\n", blocks.x);
-    confusionMatrix<<<blocks, threads>>>(output, predicts, matrix, TEST_SET);
-    int correct_predictions = 0;
-    for (int i = 0; i < OUTPUT; i++)
-    {
-        correct_predictions += matrix[(i * OUTPUT) + i];
+int **confusionMatrix(double **labels, double **predicts, int size) {
+    int **matrix = (int**)malloc(OUTPUT * sizeof(int*));
+    for (int i = 0; i < OUTPUT; i++) {
+        matrix[i] = (int*)malloc(OUTPUT * sizeof(int));
     }
-    printf("Testing on GPU -> Accuracy: %.6f, Elapsed time: %.6f\n",
-                        (double) correct_predictions / TEST_SET, time);
-    printConfusionMatrix(matrix);
-    free(predicts);
+
+    int l, p;
+    for (int i = 0; i < size; i++)
+    {
+        l = max_index(labels[i], OUTPUT);
+        p = max_index(predicts[i], OUTPUT);
+        matrix[p][l]++;
+    }
+
+    return matrix;
 }
 
 void loadModel(char* file_name, double **W1, double *b1, double **W2, double *b2) {
@@ -414,8 +441,9 @@ void genRandWeights(double **W1, double *b1, double **W2, double *b2) {
 
 int main()
 {
-    double **X_train, **Y_train, **X_test, **Y_test, **W1, **W2, *b1, *b2;
-    double *d_X_train, *d_Y_train, *d_X_test, *d_Y_test, *d_W1, *d_W2, *d_b1, *d_b2;
+    double **X_train, **Y_train, **X_test, **Y_test, *h_preds, **W1, **W2, *b1, *b2;
+    double *d_X_train, *d_Y_train, *d_X_test, *d_Y_test, *d_predicts, *d_W1, *d_W2, *d_b1, *d_b2;
+    int **matrix;
 
     X_train = (double**)malloc(TRAINING_SET * sizeof(double*));
     Y_train = (double**)malloc(TRAINING_SET * sizeof(double*));
@@ -428,6 +456,7 @@ int main()
     
     X_test = (double**)malloc(TEST_SET * sizeof(double*));
     Y_test = (double**)malloc(TEST_SET * sizeof(double*));
+    h_preds = (double*)malloc(TEST_SET * OUTPUT * sizeof(double));
     for (int i = 0; i < TEST_SET; i++)
     {
         X_test[i] = (double*)malloc(INPUT * sizeof(double));
@@ -446,14 +475,14 @@ int main()
     b1 = (double*)malloc(HIDDEN * sizeof(double));
     b2 = (double*)malloc(OUTPUT * sizeof(double));
 
-    cudaMalloc((void**)&d_X_train, TRAINING_SET * INPUT * sizeof(double));
-    cudaMalloc((void**)&d_Y_train, TRAINING_SET * OUTPUT * sizeof(double));
-    cudaMalloc((void**)&d_X_test, TEST_SET * INPUT * sizeof(double));
-    cudaMalloc((void**)&d_Y_test, TEST_SET * OUTPUT * sizeof(double));
-    cudaMalloc((void**)&d_W1, HIDDEN * INPUT * sizeof(double));
-    cudaMalloc((void**)&d_W2, HIDDEN * OUTPUT * sizeof(double));
-    cudaMalloc((void**)&d_b1, HIDDEN * sizeof(double));
-    cudaMalloc((void**)&d_b2, OUTPUT * sizeof(double));
+    cudaMalloc((double**)&d_X_train, TRAINING_SET * INPUT * sizeof(double));
+    cudaMalloc((double**)&d_Y_train, TRAINING_SET * OUTPUT * sizeof(double));
+    cudaMalloc((double**)&d_X_test, TEST_SET * INPUT * sizeof(double));
+    cudaMalloc((double**)&d_Y_test, TEST_SET * OUTPUT * sizeof(double));
+    cudaMalloc((double**)&d_W1, HIDDEN * INPUT * sizeof(double));
+    cudaMalloc((double**)&d_W2, HIDDEN * OUTPUT * sizeof(double));
+    cudaMalloc((double**)&d_b1, HIDDEN * sizeof(double));
+    cudaMalloc((double**)&d_b2, OUTPUT * sizeof(double));
 
     printf("• Network initialized...\n");
 
@@ -483,24 +512,58 @@ int main()
 
     printf("• Weights initialized...\n");
 
-    printVector(d_X_test, TEST_SET * INPUT);
+    cudaMalloc((double**)&d_predicts, TEST_SET * OUTPUT * sizeof(double));
 
     //train(h_X_train, h_Y_train, h_W1, h_W2, h_b1, h_b2);
-    //test(d_X_test, d_Y_test, d_W1, d_W2, d_b1, d_b2);
+    //test(d_X_test, d_predicts, d_W1, d_W2, d_b1, d_b2);
+    
+    double tic, toc, time;
+    dim3 threads(32);
+    dim3 blocks((TEST_SET + threads.x - 1) / threads.x);
+    printf("Threads: %d\n", threads.x);
+    printf("Blocks: %d\n", blocks.x);
+    tic = cpuTime();
+    feedForwardOnGPU<<<blocks, threads>>>(d_X_test, d_predicts, d_W1, d_W2, d_b1, d_b2);
+    gpuErrchk( cudaPeekAtLastError() );
+    gpuErrchk( cudaDeviceSynchronize() );
+    toc = cpuTime();
+    time = toc - tic;
+    printf("Testing on GPU -> Elapsed time: %.6f\n", time);
+
+    cudaMemcpy(h_preds, d_predicts, TEST_SET * OUTPUT * sizeof(double), cudaMemcpyDeviceToHost);
+
+    double **preds = matrixize(h_preds, TEST_SET, OUTPUT);
+
+    //printVector(h_preds, TEST_SET * OUTPUT);
+    //printMatrix(preds, TEST_SET, OUTPUT);
+
+    matrix = confusionMatrix(Y_test, preds, TEST_SET);
+    int correct_predictions = 0;
+    for (int i = 0; i < OUTPUT; i++)
+    {
+        correct_predictions += matrix[i][i];
+    }
+    printConfusionMatrix(matrix);
+    printf("Accuracy: %.6f, Elapsed time: %.6f\n", (double) correct_predictions / TEST_SET, time);
+
 
     free(h_X_train);
     free(h_Y_train);
     free(h_X_test);
     free(h_Y_test);
+    free(h_preds);
     free(h_W1);
     free(h_W2);
     free(b1);
     free(b2);
+    free(preds);
 
     cudaFree(d_X_train);
     cudaFree(d_Y_train);
     cudaFree(d_X_test);
     cudaFree(d_Y_test);
+    cudaFree(d_predicts);
+    cudaFree(matrix);
     cudaFree(d_W1);
     cudaFree(d_W2);
     cudaFree(d_b1);
